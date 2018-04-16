@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::prelude::*;
-use std::ops::{Add, Div, Mul};
+use std::ops::{Add, Div, Mul, Sub};
 use std::path::Path;
 
 // cargo run ; start output.ppm
@@ -46,6 +46,12 @@ impl Vector {
         self.z = saturate(self.z);
     }
 
+    fn abs(&mut self) {
+        self.x = f32::abs(self.x);
+        self.y = f32::abs(self.y);
+        self.z = f32::abs(self.z);
+    }
+
     fn dot(&self, other: Vector) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
@@ -58,6 +64,17 @@ impl Add for Vector {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
+        }
+    }
+}
+
+impl Sub for Vector {
+    type Output = Vector;
+    fn sub(self, other: Vector) -> Vector {
+        Vector {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
         }
     }
 }
@@ -99,18 +116,39 @@ fn saturate(v: f32) -> f32 {
     f32::max(0.0, f32::min(v, 1.0))
 }
 
+fn sphere(center: Vector, radius: f32, point: Vector) -> f32 {
+    (center - point).length() - radius
+}
+
 fn map(x: Vector) -> f32 {
-    x.length() - 5.0
+    let mut d = 1000.0;
+    d = f32::min(d, sphere(Vector::from_f32s(0.0, 0.0, 0.0), 5.0, x));
+    d = f32::min(d, sphere(Vector::from_f32s(0.0, -1005.0, 0.0), 1000.0, x));
+    d
+}
+
+fn normal(pos: Vector) -> Vector {
+    let dx = 0.01;
+    let c = map(pos);
+    let mut result = Vector::from_f32s(
+        map(pos + Vector::from_f32s(0.01, 0.0, 0.0)) - c,
+        map(pos + Vector::from_f32s(0.0, 0.01, 0.0)) - c,
+        map(pos + Vector::from_f32s(0.0, 0.0, 0.01)) - c,
+    );
+    result.normalize();
+    result
 }
 
 fn raymarch(ro: Vector, rd: Vector) -> f32 {
     let mut t = 0.0;
-    for _ in 0..16 {
+    for _ in 0..32 {
         let pt = ro + t * rd;
-        t += map(pt);
+        let d = map(pt);
+        t += d;
         let pt = ro + t * rd;
-        t += map(pt);
-        if t < 0.001 {
+        let d = map(pt);
+        t += d;
+        if d < 0.001 || d > 1000.0 {
             break;
         }
     }
@@ -119,22 +157,23 @@ fn raymarch(ro: Vector, rd: Vector) -> f32 {
 }
 
 fn lighting(pt: Vector) -> Vector {
-    let mut n = pt;
+    let mut n = normal(pt);
     n.normalize();
-    let mut l = Vector::from_f32s(-1.0, -1.0, 2.0);
+    let mut l = Vector::from_f32s(-1.0, 1.0, 2.0);
     l.normalize();
     Vector::from_f32(n.dot(l))
 }
 
+// u, v are in NDC - [-1,1]
 fn trace(u: f32, v: f32) -> Vector {
-    let fov = 2.0;
+    let fov = 1.0;
     let ro = Vector::from_f32s(0.0, 0.0, 10.0);
     let mut rd = Vector::from_f32s(fov * u, fov * v, -1.0);
     rd.normalize();
 
     let t = raymarch(ro, rd);
 
-    if t < 100. {
+    if t < 1000. {
         lighting(ro + t * rd)
     } else {
         Vector::new()
@@ -155,9 +194,9 @@ fn main() {
 
     for y in 0..height {
         for x in 0..width {
-            let u = x as f32 * inv_width - uoff;
-            let v = y as f32 * inv_height - voff;
-            let mut i = trace(u, v) / 20.0;
+            let u = 2.0 * (x as f32 * inv_width - uoff);
+            let v = -2.0 * (y as f32 * inv_height - voff);
+            let mut i = trace(u, v);
             i.saturate();
             image[y][x] = i;
         }
