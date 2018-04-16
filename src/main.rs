@@ -1,3 +1,7 @@
+extern crate rand;
+
+// use rand::{thread_rng, Rng};
+use rand::{Rng, ThreadRng};
 use std::fs::File;
 use std::io::prelude::*;
 use std::ops::{Add, Div, Mul, Sub};
@@ -54,6 +58,19 @@ impl Vector {
 
     fn dot(&self, other: Vector) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    fn lerp(a: Vector, b: Vector, t: f32) -> Vector {
+        (1.0 - t) * a + t * b
+    }
+
+    fn random_on_sphere(rng: &mut ThreadRng) -> Vector {
+        let mut v = Vector::from_f32s(rng.gen(), rng.gen(), rng.gen());
+        v.x -= 0.5;
+        v.y -= 0.5;
+        v.z -= 0.5;
+        v.normalize();
+        v
     }
 }
 
@@ -112,76 +129,124 @@ impl Div<f32> for Vector {
     }
 }
 
+struct Ray {
+    ro: Vector,
+    rd: Vector,
+}
+
+impl Ray {
+    fn new(ro: Vector, rd: Vector) -> Ray {
+        Ray { ro, rd }
+    }
+
+    fn get_point(&self, t: f32) -> Vector {
+        self.ro + t * self.rd
+    }
+}
+
+struct HitRecord {
+    t: f32,
+    normal: Vector,
+}
+
+struct Sphere {
+    center: Vector,
+    radius: f32,
+}
+
+impl Sphere {
+    fn new(center: Vector, radius: f32) -> Sphere {
+        Sphere { center, radius }
+    }
+
+    fn intersect(&self, r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
+        let oc = r.ro - self.center;
+        let b = oc.dot(r.rd);
+        let c = oc.dot(oc) - self.radius * self.radius;
+        // det
+        let h = b * b - c;
+        if h >= 0.0 {
+            let sqrt = f32::sqrt(h);
+
+            let t = -b - sqrt;
+            if t >= tmin && t <= tmax {
+                let mut normal = r.get_point(t) - self.center;
+                normal.normalize();
+                return Some(HitRecord { t, normal });
+            }
+
+            let t = -b + sqrt;
+            if t >= tmin && t <= tmax {
+                let mut normal = r.get_point(t) - self.center;
+                normal.normalize();
+                return Some(HitRecord { t, normal });
+            }
+        }
+
+        None
+    }
+}
+
 fn saturate(v: f32) -> f32 {
     f32::max(0.0, f32::min(v, 1.0))
 }
 
-fn sphere(center: Vector, radius: f32, point: Vector) -> f32 {
-    (center - point).length() - radius
-}
+fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
+    let mut t = tmax;
+    let mut result = None;
 
-fn map(x: Vector) -> f32 {
-    let mut d = 1000.0;
-    d = f32::min(d, sphere(Vector::from_f32s(0.0, 0.0, 0.0), 5.0, x));
-    d = f32::min(d, sphere(Vector::from_f32s(0.0, -1005.0, 0.0), 1000.0, x));
-    d
-}
+    if let Some(hr) = Sphere::new(Vector::from_f32s(0.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
+        t = hr.t;
+        result = Some(hr);
+    }
+    if let Some(hr) =
+        Sphere::new(Vector::from_f32s(0.0, -100.5, -1.0), 100.0).intersect(&r, tmin, t)
+    {
+        t = hr.t;
+        result = Some(hr);
+    }
+    if let Some(hr) = Sphere::new(Vector::from_f32s(1.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
+        t = hr.t;
+        result = Some(hr);
+    }
+    if let Some(hr) = Sphere::new(Vector::from_f32s(-1.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
+        t = hr.t;
+        result = Some(hr);
+    }
 
-fn normal(pos: Vector) -> Vector {
-    let dx = 0.01;
-    let c = map(pos);
-    let mut result = Vector::from_f32s(
-        map(pos + Vector::from_f32s(0.01, 0.0, 0.0)) - c,
-        map(pos + Vector::from_f32s(0.0, 0.01, 0.0)) - c,
-        map(pos + Vector::from_f32s(0.0, 0.0, 0.01)) - c,
-    );
-    result.normalize();
     result
 }
 
-fn raymarch(ro: Vector, rd: Vector) -> f32 {
-    let mut t = 0.0;
-    for _ in 0..32 {
-        let pt = ro + t * rd;
-        let d = map(pt);
-        t += d;
-        let pt = ro + t * rd;
-        let d = map(pt);
-        t += d;
-        if d < 0.001 || d > 1000.0 {
-            break;
-        }
+fn render(r: Ray, bounces_rem: i32, rng: &mut ThreadRng) -> Vector {
+    if bounces_rem <= 0 {
+        return Vector::new();
     }
 
-    t
-}
+    if let Some(hr) = intersect(&r, 0.0001, 1000.0) {
+        let ro = r.get_point(hr.t);
+        let mut rd = hr.normal + 0.999 * Vector::random_on_sphere(rng);
+        rd.normalize();
 
-fn lighting(pt: Vector) -> Vector {
-    let mut n = normal(pt);
-    n.normalize();
-    let mut l = Vector::from_f32s(-1.0, 1.0, 2.0);
-    l.normalize();
-    Vector::from_f32(n.dot(l))
+        0.5 * render(Ray { ro, rd }, bounces_rem - 1, rng)
+    } else {
+        let t = saturate(r.rd.y / 2.0 + 0.5);
+        Vector::lerp(Vector::from_f32(1.0), Vector::from_f32s(0.5, 0.7, 1.0), t)
+    }
 }
 
 // u, v are in NDC - [-1,1]
-fn trace(u: f32, v: f32) -> Vector {
+fn color(u: f32, v: f32, rng: &mut ThreadRng) -> Vector {
     let fov = 1.0;
-    let ro = Vector::from_f32s(0.0, 0.0, 10.0);
+    let ro = Vector::from_f32s(0.0, 0.0, 0.0);
     let mut rd = Vector::from_f32s(fov * u, fov * v, -1.0);
     rd.normalize();
 
-    let t = raymarch(ro, rd);
-
-    if t < 1000. {
-        lighting(ro + t * rd)
-    } else {
-        Vector::new()
-    }
+    let r = Ray::new(ro, rd);
+    render(r, 10, rng)
 }
 
 fn main() {
-    let mut image = vec![vec![Vector::new(); 200]; 100];
+    let mut image = vec![vec![Vector::new(); 400]; 200];
 
     let width = image[0].len();
     let height = image.len();
@@ -191,14 +256,27 @@ fn main() {
     let inv_width = aspect * inv_width;
     let uoff = 0.5 * aspect;
     let voff = 0.5;
+    let spp = 16;
 
     for y in 0..height {
+        let mut rng = rand::thread_rng();
         for x in 0..width {
-            let u = 2.0 * (x as f32 * inv_width - uoff);
-            let v = -2.0 * (y as f32 * inv_height - voff);
-            let mut i = trace(u, v);
-            i.saturate();
-            image[y][x] = i;
+            let mut col = Vector::new();
+
+            for s in 0..spp {
+                let mut xf: f32 = rng.gen();
+                xf += x as f32;
+                let mut yf: f32 = rng.gen();
+                yf += y as f32;
+                let u = 2.0 * (xf * inv_width - uoff);
+                let v = -2.0 * (yf * inv_height - voff);
+                let mut i = color(u, v, &mut rng);
+                col = col + i;
+            }
+
+            col = col / spp as f32;
+            col.saturate();
+            image[y][x] = col;
         }
     }
 
