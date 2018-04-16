@@ -211,7 +211,7 @@ fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
         result = Some(hr);
     }
     if let Some(hr) = Sphere::new(Vector::from_f32s(-1.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
-        t = hr.t;
+        // t = hr.t;
         result = Some(hr);
     }
 
@@ -267,7 +267,7 @@ fn main() {
             let mut xf = x as f32;
             let mut col = Vector::new();
 
-            for s in 0..spp {
+            for _s in 0..spp {
                 let xf = xf + rng.next_f32();
                 let yf = yf + rng.next_f32();
 
