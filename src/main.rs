@@ -50,11 +50,11 @@ impl Vector {
         self.z = saturate(self.z);
     }
 
-    fn abs(&mut self) {
-        self.x = f32::abs(self.x);
-        self.y = f32::abs(self.y);
-        self.z = f32::abs(self.z);
-    }
+    // fn abs(&mut self) {
+    //     self.x = f32::abs(self.x);
+    //     self.y = f32::abs(self.y);
+    //     self.z = f32::abs(self.z);
+    // }
 
     fn dot(&self, other: Vector) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
@@ -65,10 +65,11 @@ impl Vector {
     }
 
     fn random_on_sphere(rng: &mut ThreadRng) -> Vector {
-        let mut v = Vector::from_f32s(rng.gen(), rng.gen(), rng.gen());
-        v.x -= 0.5;
-        v.y -= 0.5;
-        v.z -= 0.5;
+        let mut v = Vector::from_f32s(
+            rng.next_f32() - 0.5,
+            rng.next_f32() - 0.5,
+            rng.next_f32() - 0.5,
+        );
         v.normalize();
         v
     }
@@ -259,18 +260,22 @@ fn main() {
     let spp = 16;
 
     for y in 0..height {
+        let mut yf = y as f32;
         let mut rng = rand::thread_rng();
+
         for x in 0..width {
+            let mut xf = x as f32;
             let mut col = Vector::new();
 
             for s in 0..spp {
-                let mut xf: f32 = rng.gen();
-                xf += x as f32;
-                let mut yf: f32 = rng.gen();
-                yf += y as f32;
+                let xf = xf + rng.next_f32();
+                let yf = yf + rng.next_f32();
+
                 let u = 2.0 * (xf * inv_width - uoff);
                 let v = -2.0 * (yf * inv_height - voff);
+
                 let mut i = color(u, v, &mut rng);
+
                 col = col + i;
             }
 
