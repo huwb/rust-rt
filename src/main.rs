@@ -1,7 +1,9 @@
 extern crate rand;
+extern crate simple_stopwatch;
 
 // use rand::{thread_rng, Rng};
 use rand::{Rng, ThreadRng};
+use simple_stopwatch::Stopwatch;
 use std::fs::File;
 use std::io::prelude::*;
 use std::ops::{Add, Div, Mul, Sub};
@@ -259,6 +261,8 @@ fn main() {
     let voff = 0.5;
     let spp = 16;
 
+    let sw = Stopwatch::start_new();
+
     for y in 0..height {
         let mut yf = y as f32;
         let mut rng = rand::thread_rng();
@@ -285,7 +289,13 @@ fn main() {
         }
     }
 
+    let elapsed_s = sw.s();
+    println!("Render time: {}s", elapsed_s);
+
+    let sw = Stopwatch::start_new();
     write_output(image, "output.ppm");
+    let elapsed_s = sw.s();
+    println!("Write image time: {}s", elapsed_s);
 }
 
 fn write_output(image: Vec<Vec<Vector>>, filename: &str) {

@@ -6,3 +6,4 @@ authors = ["Huw Bowles <huw.bowles@gmail.com>"]
 [dependencies]
 
 rand = "0.3.14"
+simple-stopwatch="0.1.4"
