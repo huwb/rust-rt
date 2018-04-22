@@ -195,26 +195,21 @@ fn saturate(v: f32) -> f32 {
 }
 
 fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
-    let mut t = tmax;
     let mut result = None;
 
-    if let Some(hr) = Sphere::new(Vector::from_f32s(0.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
-        t = hr.t;
-        result = Some(hr);
-    }
-    if let Some(hr) =
-        Sphere::new(Vector::from_f32s(0.0, -100.5, -1.0), 100.0).intersect(&r, tmin, t)
-    {
-        t = hr.t;
-        result = Some(hr);
-    }
-    if let Some(hr) = Sphere::new(Vector::from_f32s(1.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
-        t = hr.t;
-        result = Some(hr);
-    }
-    if let Some(hr) = Sphere::new(Vector::from_f32s(-1.0, 0.0, -1.0), 0.5).intersect(&r, tmin, t) {
-        // t = hr.t;
-        result = Some(hr);
+    let scene = vec![
+        Sphere::new(Vector::from_f32s(0.0, 0.0, -1.0), 0.5),
+        Sphere::new(Vector::from_f32s(0.0, -100.5, -1.0), 100.0),
+        Sphere::new(Vector::from_f32s(1.0, 0.0, -1.0), 0.5),
+        Sphere::new(Vector::from_f32s(-1.0, 0.0, -1.0), 0.5),
+    ];
+
+    let mut tmax = tmax;
+    for prim in scene {
+        if let Some(hr) = prim.intersect(&r, tmin, tmax) {
+            tmax = hr.t;
+            result = Some(hr);
+        }
     }
 
     result
@@ -272,11 +267,8 @@ fn main() {
             let mut col = Vector::new();
 
             for _s in 0..spp {
-                let xf = xf + rng.next_f32();
-                let yf = yf + rng.next_f32();
-
-                let u = 2.0 * (xf * inv_width - uoff);
-                let v = -2.0 * (yf * inv_height - voff);
+                let u = 2.0 * ((xf + rng.next_f32()) * inv_width - uoff);
+                let v = -2.0 * ((yf + rng.next_f32()) * inv_height - voff);
 
                 let mut i = color(u, v, &mut rng);
 
