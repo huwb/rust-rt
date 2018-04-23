@@ -3,7 +3,7 @@ extern crate simple_stopwatch;
 
 pub mod threadpool;
 
-use rand::{Rng, ThreadRng};
+use rand::Rng;
 use simple_stopwatch::Stopwatch;
 use std::fs::File;
 use std::io::prelude::*;
@@ -13,6 +13,8 @@ use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
 
 // cargo run ; start output.ppm
+
+static MAX_BOUNCES: usize = 10;
 
 #[derive(Clone, Copy, Debug)]
 struct Vector {
@@ -69,7 +71,7 @@ impl Vector {
         (1.0 - t) * a + t * b
     }
 
-    fn random_on_sphere(rng: &mut ThreadRng) -> Vector {
+    fn random_on_sphere(rng: &mut Rng) -> Vector {
         let mut v = Vector::from_f32s(
             rng.next_f32() - 0.5,
             rng.next_f32() - 0.5,
@@ -218,7 +220,7 @@ fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
     result
 }
 
-fn render(r: Ray, bounces_rem: i32, rng: &mut ThreadRng) -> Vector {
+fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
     if bounces_rem <= 0 {
         return Vector::new();
     }
@@ -236,14 +238,14 @@ fn render(r: Ray, bounces_rem: i32, rng: &mut ThreadRng) -> Vector {
 }
 
 // u, v are in NDC - [-1,1]
-fn color(u: f32, v: f32, rng: &mut ThreadRng) -> Vector {
+fn color(u: f32, v: f32, rng: &mut Rng) -> Vector {
     let fov = 1.0;
     let ro = Vector::from_f32s(0.0, 0.0, 0.0);
     let mut rd = Vector::from_f32s(fov * u, fov * v, -1.0);
     rd.normalize();
 
     let r = Ray::new(ro, rd);
-    render(r, 10, rng)
+    render(r, MAX_BOUNCES, rng)
 }
 
 fn main() {
@@ -279,7 +281,7 @@ fn main() {
         // send this row off for processing by a worker thread
         tp.dispatch(Box::new(move || {
             let mut row = row.lock().unwrap();
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::weak_rng();
 
             for x in 0..width {
                 let mut xf = x as f32;
