@@ -37,27 +37,23 @@ impl Vector {
     }
 
     fn length(&self) -> f32 {
-        f32::sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 
-    fn normalize(&mut self) {
+    fn normalize(&mut self) -> Vector {
         let len = self.length();
         self.x /= len;
         self.y /= len;
         self.z /= len;
+        *self
     }
 
-    fn saturate(&mut self) {
+    fn saturate(&mut self) -> Vector {
         self.x = saturate(self.x);
         self.y = saturate(self.y);
         self.z = saturate(self.z);
+        *self
     }
-
-    // fn abs(&mut self) {
-    //     self.x = f32::abs(self.x);
-    //     self.y = f32::abs(self.y);
-    //     self.z = f32::abs(self.z);
-    // }
 
     fn dot(&self, other: Vector) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
@@ -68,13 +64,11 @@ impl Vector {
     }
 
     fn random_on_sphere(rng: &mut Rng) -> Vector {
-        let mut v = Vector::new(
+        Vector::new(
             rng.next_f32() - 0.5,
             rng.next_f32() - 0.5,
             rng.next_f32() - 0.5,
-        );
-        v.normalize();
-        v
+        ).normalize()
     }
 }
 
@@ -170,19 +164,17 @@ impl Sphere {
         // det
         let h = b * b - c;
         if h >= 0.0 {
-            let sqrt = f32::sqrt(h);
+            let h = h.sqrt();
 
-            let t = -b - sqrt;
+            let t = -b - h;
             if t >= tmin && t <= tmax {
-                let mut normal = r.get_point(t) - self.center;
-                normal.normalize();
+                let normal = (r.get_point(t) - self.center).normalize();
                 return Some(HitRecord { t, normal });
             }
 
-            let t = -b + sqrt;
+            let t = -b + h;
             if t >= tmin && t <= tmax {
-                let mut normal = r.get_point(t) - self.center;
-                normal.normalize();
+                let normal = (r.get_point(t) - self.center).normalize();
                 return Some(HitRecord { t, normal });
             }
         }
@@ -192,7 +184,7 @@ impl Sphere {
 }
 
 fn saturate(v: f32) -> f32 {
-    f32::max(0.0, f32::min(v, 1.0))
+    v.min(1.0).max(0.0)
 }
 
 fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
@@ -223,10 +215,9 @@ fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
 
     if let Some(hr) = intersect(&r, 0.0001, 1000.0) {
         let ro = r.get_point(hr.t);
-        let mut rd = hr.normal + 0.999 * Vector::random_on_sphere(rng);
-        rd.normalize();
-
-        0.5 * render(Ray { ro, rd }, bounces_rem - 1, rng)
+        let rd = (hr.normal + 0.999 * Vector::random_on_sphere(rng)).normalize();
+        let albedo = 0.5;
+        albedo * render(Ray { ro, rd }, bounces_rem - 1, rng)
     } else {
         let t = saturate(r.rd.y / 2.0 + 0.5);
         Vector::lerp(Vector::from_f32(1.0), Vector::new(0.5, 0.7, 1.0), t)
@@ -237,8 +228,7 @@ fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
 fn color(u: f32, v: f32, rng: &mut Rng) -> Vector {
     let fov = 1.0;
     let ro = Vector::new(0.0, 0.0, 0.0);
-    let mut rd = Vector::new(fov * u, fov * v, -1.0);
-    rd.normalize();
+    let rd = Vector::new(fov * u, fov * v, -1.0).normalize();
 
     let r = Ray::new(ro, rd);
     render(r, MAX_BOUNCES, rng)
@@ -250,7 +240,10 @@ fn main() {
     let spp = 256;
     let thread_count = 8;
 
-    println!("{}x{}, {}spp, {} threads", width, height, spp, thread_count);
+    println!(
+        "{} x {}, {} spp, {} threads",
+        width, height, spp, thread_count
+    );
 
     // create a pool of worker threads
     let tp = ThreadPool::new(thread_count);
@@ -294,9 +287,7 @@ fn main() {
                     col = col + i;
                 }
 
-                col = col / spp as f32;
-                col.saturate();
-                row[x] = col;
+                row[x] = (col / spp as f32).saturate();
             }
         }));
     }
@@ -331,9 +322,9 @@ fn write_output(image: Vec<Arc<Mutex<Vec<Vector>>>>, filename: &str) {
     for y in 0..height {
         let row = &image[y].lock().unwrap();
         for x in 0..width {
-            let r = (255.99 * f32::sqrt(row[x].x)) as i32;
-            let g = (255.99 * f32::sqrt(row[x].y)) as i32;
-            let b = (255.99 * f32::sqrt(row[x].z)) as i32;
+            let r = (255.99 * row[x].x.sqrt()) as i32;
+            let g = (255.99 * row[x].y.sqrt()) as i32;
+            let b = (255.99 * row[x].z.sqrt()) as i32;
             write!(&mut file, "{}\t{}\t{}\t", r, g, b).unwrap();
         }
         file.write_all(b"\n").unwrap();
