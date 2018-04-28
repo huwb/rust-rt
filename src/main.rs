@@ -322,13 +322,13 @@ fn write_output(image: Vec<Arc<Mutex<Vec<Vector>>>>, filename: &str) {
         filename.display()
     ));
 
-    writeln!(&mut file, "P3").expect("Could not write to file");
+    writeln!(&mut file, "P3").unwrap();
 
     let width = { image[0].lock().unwrap().len() };
     let height = image.len();
 
-    writeln!(&mut file, "{} {}", width, height).expect("Could not write to file");
-    writeln!(&mut file, "{}", 255).expect("Could not write to file");
+    writeln!(&mut file, "{} {}", width, height).unwrap();
+    writeln!(&mut file, "{}", 255).unwrap();
 
     for y in 0..height {
         let row = &image[y].lock().unwrap();
@@ -336,8 +336,8 @@ fn write_output(image: Vec<Arc<Mutex<Vec<Vector>>>>, filename: &str) {
             let r = (255.99 * f32::sqrt(row[x].x)) as i32;
             let g = (255.99 * f32::sqrt(row[x].y)) as i32;
             let b = (255.99 * f32::sqrt(row[x].z)) as i32;
-            write!(&mut file, "{}\t{}\t{}\t", r, g, b).expect("Could not write to file");
+            write!(&mut file, "{}\t{}\t{}\t", r, g, b).unwrap();
         }
-        file.write_all(b"\n").expect("Could not write to file");
+        file.write_all(b"\n").unwrap();
     }
 }
