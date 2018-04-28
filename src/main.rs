@@ -24,20 +24,16 @@ struct Vector {
 }
 
 impl Vector {
-    fn new() -> Vector {
-        Vector {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        }
+    fn new(x: f32, y: f32, z: f32) -> Vector {
+        Vector { x, y, z }
     }
 
     fn from_f32(v: f32) -> Vector {
-        Vector { x: v, y: v, z: v }
+        Vector::new(v, v, v)
     }
 
-    fn from_f32s(x: f32, y: f32, z: f32) -> Vector {
-        Vector { x, y, z }
+    fn zero() -> Vector {
+        Vector::from_f32(0.0)
     }
 
     fn length(&self) -> f32 {
@@ -72,7 +68,7 @@ impl Vector {
     }
 
     fn random_on_sphere(rng: &mut Rng) -> Vector {
-        let mut v = Vector::from_f32s(
+        let mut v = Vector::new(
             rng.next_f32() - 0.5,
             rng.next_f32() - 0.5,
             rng.next_f32() - 0.5,
@@ -203,10 +199,10 @@ fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
     let mut result = None;
 
     let scene = vec![
-        Sphere::new(Vector::from_f32s(0.0, 0.0, -1.0), 0.5),
-        Sphere::new(Vector::from_f32s(0.0, -100.5, -1.0), 100.0),
-        Sphere::new(Vector::from_f32s(1.0, 0.0, -1.0), 0.5),
-        Sphere::new(Vector::from_f32s(-1.0, 0.0, -1.0), 0.5),
+        Sphere::new(Vector::new(0.0, 0.0, -1.0), 0.5),
+        Sphere::new(Vector::new(0.0, -100.5, -1.0), 100.0),
+        Sphere::new(Vector::new(1.0, 0.0, -1.0), 0.5),
+        Sphere::new(Vector::new(-1.0, 0.0, -1.0), 0.5),
     ];
 
     let mut tmax = tmax;
@@ -222,7 +218,7 @@ fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
 
 fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
     if bounces_rem <= 0 {
-        return Vector::new();
+        return Vector::zero();
     }
 
     if let Some(hr) = intersect(&r, 0.0001, 1000.0) {
@@ -233,15 +229,15 @@ fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
         0.5 * render(Ray { ro, rd }, bounces_rem - 1, rng)
     } else {
         let t = saturate(r.rd.y / 2.0 + 0.5);
-        Vector::lerp(Vector::from_f32(1.0), Vector::from_f32s(0.5, 0.7, 1.0), t)
+        Vector::lerp(Vector::from_f32(1.0), Vector::new(0.5, 0.7, 1.0), t)
     }
 }
 
 // u, v are in NDC - [-1,1]
 fn color(u: f32, v: f32, rng: &mut Rng) -> Vector {
     let fov = 1.0;
-    let ro = Vector::from_f32s(0.0, 0.0, 0.0);
-    let mut rd = Vector::from_f32s(fov * u, fov * v, -1.0);
+    let ro = Vector::new(0.0, 0.0, 0.0);
+    let mut rd = Vector::new(fov * u, fov * v, -1.0);
     rd.normalize();
 
     let r = Ray::new(ro, rd);
@@ -254,6 +250,8 @@ fn main() {
     let spp = 256;
     let thread_count = 8;
 
+    println!("{}x{}, {}spp, {} threads", width, height, spp, thread_count);
+
     // create a pool of worker threads
     let tp = ThreadPool::new(thread_count);
 
@@ -261,7 +259,7 @@ fn main() {
     // let mut image = vec![Arc::new(Mutex::new(vec![Vector::new(); width])); height];
     let mut image = vec![];
     for _ in 0..height {
-        image.push(Arc::new(Mutex::new(vec![Vector::new(); width])));
+        image.push(Arc::new(Mutex::new(vec![Vector::zero(); width])));
     }
 
     let inv_width = 1.0 / width as f32;
@@ -285,7 +283,7 @@ fn main() {
 
             for x in 0..width {
                 let mut xf = x as f32;
-                let mut col = Vector::new();
+                let mut col = Vector::zero();
 
                 for _s in 0..spp {
                     let u = 2.0 * ((xf + rng.next_f32()) * inv_width - uoff);
