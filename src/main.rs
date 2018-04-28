@@ -35,16 +35,22 @@ impl Ray {
 struct HitRecord {
     t: f32,
     normal: Vector,
+    material: Material,
 }
 
 struct Sphere {
     center: Vector,
     radius: f32,
+    material: Material,
 }
 
 impl Sphere {
-    fn new(center: Vector, radius: f32) -> Sphere {
-        Sphere { center, radius }
+    fn new(center: Vector, radius: f32, material: Material) -> Sphere {
+        Sphere {
+            center,
+            radius,
+            material,
+        }
     }
 
     fn intersect(&self, r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
@@ -59,13 +65,21 @@ impl Sphere {
             let t = -b - h;
             if t >= tmin && t <= tmax {
                 let normal = (r.get_point(t) - self.center).normalize();
-                return Some(HitRecord { t, normal });
+                return Some(HitRecord {
+                    t,
+                    normal,
+                    material: self.material,
+                });
             }
 
             let t = -b + h;
             if t >= tmin && t <= tmax {
                 let normal = (r.get_point(t) - self.center).normalize();
-                return Some(HitRecord { t, normal });
+                return Some(HitRecord {
+                    t,
+                    normal,
+                    material: self.material,
+                });
             }
         }
 
@@ -73,16 +87,81 @@ impl Sphere {
     }
 }
 
-fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
-    let mut result = None;
+#[derive(Copy, Clone)]
+struct Material {
+    albedo: Vector,
+    roughness: f32,
+    metalness: f32,
+    gloss: f32,
+}
 
+impl Material {
+    fn scatter(&self, r: &Ray, hr: &HitRecord, rng: &mut Rng) -> Option<(Vector, Ray)> {
+        let ro = r.get_point(hr.t);
+
+        if rng.next_f32() < self.gloss {
+            let normal =
+                (hr.normal + 0.999 * self.roughness * Vector::random_on_sphere(rng)).normalize();
+            let rd = r.rd.reflect(normal);
+
+            if rd.dot(normal) > 0.0 {
+                let attenuation = Vector::lerp(Vector::from_f32(1.0), self.albedo, self.metalness);
+                Some((attenuation, Ray { ro, rd }))
+            } else {
+                None
+            }
+        } else {
+            let normal = (hr.normal + 0.999 * Vector::random_on_sphere(rng)).normalize();
+            Some((self.albedo, Ray { ro, rd: normal }))
+        }
+    }
+}
+
+fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
     let scene = vec![
-        Sphere::new(Vector::new(0.0, 0.0, -1.0), 0.5),
-        Sphere::new(Vector::new(0.0, -100.5, -1.0), 100.0),
-        Sphere::new(Vector::new(1.0, 0.0, -1.0), 0.5),
-        Sphere::new(Vector::new(-1.0, 0.0, -1.0), 0.5),
+        Sphere::new(
+            Vector::new(0.0, -100.5, -1.0),
+            100.0,
+            Material {
+                albedo: Vector::new(0.6, 0.6, 0.6),
+                roughness: 1.0,
+                metalness: 0.0,
+                gloss: 0.0,
+            },
+        ),
+        Sphere::new(
+            Vector::new(-1.0, 0.0, -1.0),
+            0.5,
+            Material {
+                albedo: Vector::new(0.4, 0.4, 0.8),
+                roughness: 0.1,
+                metalness: 0.0,
+                gloss: 0.3,
+            },
+        ),
+        Sphere::new(
+            Vector::new(0.0, 0.0, -1.0),
+            0.5,
+            Material {
+                albedo: Vector::new(0.8, 0.4, 0.4),
+                roughness: 1.0,
+                metalness: 0.0,
+                gloss: 0.0,
+            },
+        ),
+        Sphere::new(
+            Vector::new(1.0, 0.0, -1.0),
+            0.5,
+            Material {
+                albedo: Vector::new(0.4, 0.8, 0.4),
+                roughness: 1.0,
+                metalness: 0.0,
+                gloss: 0.0,
+            },
+        ),
     ];
 
+    let mut result = None;
     let mut tmax = tmax;
     for prim in scene {
         if let Some(hr) = prim.intersect(&r, tmin, tmax) {
@@ -100,13 +179,23 @@ fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
     }
 
     if let Some(hr) = intersect(&r, 0.0001, 1000.0) {
-        let ro = r.get_point(hr.t);
-        let rd = (hr.normal + 0.999 * Vector::random_on_sphere(rng)).normalize();
-        let albedo = 0.5;
-        albedo * render(Ray { ro, rd }, bounces_rem - 1, rng)
+        // ray intersected geometry
+        if let Some((attenuation, reflected)) = hr.material.scatter(&r, &hr, rng) {
+            // material reflected ray
+            attenuation * render(reflected, bounces_rem - 1, rng)
+        } else {
+            // material absorbed ray
+            Vector::zero()
+        }
     } else {
+        // ray missed geometry
         let t = vector::saturate(r.rd.y / 2.0 + 0.5);
-        Vector::lerp(Vector::from_f32(1.0), Vector::new(0.5, 0.7, 1.0), t)
+        let sky_color = Vector::lerp(Vector::from_f32(1.0), Vector::new(0.5, 0.7, 1.0), t);
+        let sun_color = 8.0 * r.rd
+            .dot(Vector::new(2.0, 0.5, 1.0).normalize())
+            .max(0.0)
+            .powf(16.0) * Vector::new(1.0, 1.0, 0.5);
+        sky_color + sun_color
     }
 }
 

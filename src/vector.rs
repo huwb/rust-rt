@@ -55,6 +55,10 @@ impl Vector {
             rng.next_f32() - 0.5,
         ).normalize()
     }
+
+    pub fn reflect(&self, normal: Vector) -> Vector {
+        *self - 2.0 * self.dot(normal) * normal
+    }
 }
 
 impl Add for Vector {
@@ -75,6 +79,17 @@ impl Sub for Vector {
             x: self.x - other.x,
             y: self.y - other.y,
             z: self.z - other.z,
+        }
+    }
+}
+
+impl Mul for Vector {
+    type Output = Vector;
+    fn mul(self, other: Vector) -> Vector {
+        Vector {
+            x: self.x * other.x,
+            y: self.y * other.y,
+            z: self.z * other.z,
         }
     }
 }
