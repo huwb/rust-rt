@@ -2,130 +2,20 @@ extern crate rand;
 extern crate simple_stopwatch;
 
 pub mod threadpool;
+pub mod vector;
 
 use rand::Rng;
 use simple_stopwatch::Stopwatch;
 use std::fs::File;
 use std::io::prelude::*;
-use std::ops::{Add, Div, Mul, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
+use vector::Vector;
 
 // cargo run ; start output.ppm
 
 static MAX_BOUNCES: usize = 10;
-
-#[derive(Clone, Copy, Debug)]
-struct Vector {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-impl Vector {
-    fn new(x: f32, y: f32, z: f32) -> Vector {
-        Vector { x, y, z }
-    }
-
-    fn from_f32(v: f32) -> Vector {
-        Vector::new(v, v, v)
-    }
-
-    fn zero() -> Vector {
-        Vector::from_f32(0.0)
-    }
-
-    fn length(&self) -> f32 {
-        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
-    }
-
-    fn normalize(&mut self) -> Vector {
-        let len = self.length();
-        self.x /= len;
-        self.y /= len;
-        self.z /= len;
-        *self
-    }
-
-    fn saturate(&mut self) -> Vector {
-        self.x = saturate(self.x);
-        self.y = saturate(self.y);
-        self.z = saturate(self.z);
-        *self
-    }
-
-    fn dot(&self, other: Vector) -> f32 {
-        self.x * other.x + self.y * other.y + self.z * other.z
-    }
-
-    fn lerp(a: Vector, b: Vector, t: f32) -> Vector {
-        (1.0 - t) * a + t * b
-    }
-
-    fn random_on_sphere(rng: &mut Rng) -> Vector {
-        Vector::new(
-            rng.next_f32() - 0.5,
-            rng.next_f32() - 0.5,
-            rng.next_f32() - 0.5,
-        ).normalize()
-    }
-}
-
-impl Add for Vector {
-    type Output = Vector;
-    fn add(self, other: Vector) -> Vector {
-        Vector {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-        }
-    }
-}
-
-impl Sub for Vector {
-    type Output = Vector;
-    fn sub(self, other: Vector) -> Vector {
-        Vector {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-        }
-    }
-}
-
-impl Mul<f32> for Vector {
-    type Output = Vector;
-    fn mul(self, other: f32) -> Vector {
-        Vector {
-            x: self.x * other,
-            y: self.y * other,
-            z: self.z * other,
-        }
-    }
-}
-
-impl Mul<Vector> for f32 {
-    type Output = Vector;
-    fn mul(self, other: Vector) -> Vector {
-        Vector {
-            x: self * other.x,
-            y: self * other.y,
-            z: self * other.z,
-        }
-    }
-}
-
-impl Div<f32> for Vector {
-    type Output = Vector;
-    fn div(self, other: f32) -> Vector {
-        Vector {
-            x: self.x / other,
-            y: self.y / other,
-            z: self.z / other,
-        }
-    }
-}
 
 struct Ray {
     ro: Vector,
@@ -183,10 +73,6 @@ impl Sphere {
     }
 }
 
-fn saturate(v: f32) -> f32 {
-    v.min(1.0).max(0.0)
-}
-
 fn intersect(r: &Ray, tmin: f32, tmax: f32) -> Option<HitRecord> {
     let mut result = None;
 
@@ -219,7 +105,7 @@ fn render(r: Ray, bounces_rem: usize, rng: &mut Rng) -> Vector {
         let albedo = 0.5;
         albedo * render(Ray { ro, rd }, bounces_rem - 1, rng)
     } else {
-        let t = saturate(r.rd.y / 2.0 + 0.5);
+        let t = vector::saturate(r.rd.y / 2.0 + 0.5);
         Vector::lerp(Vector::from_f32(1.0), Vector::new(0.5, 0.7, 1.0), t)
     }
 }
